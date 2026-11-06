@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Royale: Number Elimination</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for Retro Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;700&display=swap');
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        /* Neon Glow Utility Classes */
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4), inset 0 0 10px rgba(0, 255, 204, 0.2);
+        }
+
+        .glow-cyan-lg {
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.6);
+        }
+
+        .glow-pink {
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.4), inset 0 0 10px rgba(255, 0, 127, 0.2);
+        }
+
+        .text-glow-cyan {
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.7);
+        }
+
+        .text-glow-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.7);
+        }
+
+        /* CRT Grid Pattern Background */
+        .bg-grid-pattern {
+            background-image: linear-gradient(to right, rgba(0, 255, 204, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(0, 255, 204, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        /* Player Tile Animations & States */
+        .player-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .player-card.active {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        .player-card.user-active {
+            border-color: #00ffcc;
+            background: rgba(0, 255, 204, 0.2);
+            animation: pulse-user 2s infinite alternate;
+        }
+
+        .player-card.eliminated {
+            border-color: #374151;
+            background: rgba(31, 41, 55, 0.4);
+            filter: grayscale(100%);
+            opacity: 0.4;
+            transform: scale(0.92);
+        }
+
+        .player-card.just-eliminated {
+            animation: shake-elim 0.5s ease-in-out forwards;
+        }
+
+        @keyframes pulse-user {
+            0% { box-shadow: 0 0 5px rgba(0, 255, 204, 0.4); }
+            100% { box-shadow: 0 0 20px rgba(0, 255, 204, 0.8); }
+        }
+
+        @keyframes shake-elim {
+            0% { transform: translate(0, 0) scale(1); border-color: #ef4444; }
+            20% { transform: translate(-4px, 0) scale(1.05); border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.8); }
+            40% { transform: translate(4px, 0) scale(1.05); }
+            60% { transform: translate(-4px, 0); }
+            80% { transform: translate(4px, 0); }
+            100% { transform: translate(0, 0) scale(0.92); border-color: #374151; opacity: 0.4; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00ffcc;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-grid-pattern flex flex-col justify-between select-none">
+
+    <!-- Top Navigation / Header -->
+    <header class="w-full border-b border-gray-800 bg-[#0b0f19]/90 backdrop-blur px-6 py-4 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-3">
+            <div class="w-3 h-3 rounded-full bg-[#00ffcc] animate-ping"></div>
+            <h1 class="font-orbitron font-extrabold text-xl md:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-[#00ffcc] to-[#ff007f] tracking-wider">
+                BATTLE ROYALE <span class="text-xs px-2 py-0.5 rounded border border-[#00ffcc] text-[#00ffcc] ml-2">NUM-ELIM V1.0</span>
+            </h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button id="soundToggleBtn" class="px-3 py-1.5 rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:text-[#00ffcc] hover:border-[#00ffcc] transition flex items-center gap-2 text-sm font-semibold">
+                <i data-lucide="volume-2" class="w-4 h-4"></i>
+                <span id="soundStatusText">SFX: ON</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container for Screens -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8">
+
+        <!-- SCREEN 1: ENTER USER ID -->
+        <section id="screenEnterId" class="w-full max-w-md bg-gray-900/80 border border-[#00ffcc]/30 rounded-2xl p-6 md:p-8 glow-cyan flex flex-col items-center text-center backdrop-blur relative overflow-hidden">
+            <div class="absolute -top-12 -left-12 w-32 h-32 bg-[#00ffcc]/10 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-12 -right-12 w-32 h-32 bg-[#ff007f]/10 rounded-full blur-2xl"></div>
+
+            <div class="w-16 h-16 rounded-full border border-[#00ffcc] bg-[#00ffcc]/10 flex items-center justify-center mb-6 text-[#00ffcc] shadow-[0_0_15px_rgba(0,255,204,0.3)]">
+                <i data-lucide="shield-check" class="w-8 h-8"></i>
+            </div>
+
+            <h2 class="font-orbitron font-bold text-2xl text-white mb-2 tracking-wide">ENTER PLAYER ID</h2>
+            <p class="text-gray-400 text-sm mb-6">Initialize your combat sequence with a 5-digit security pass key.</p>
+
+            <form id="idForm" onsubmit="handleIdSubmit(event)" class="w-full flex flex-col items-center space-y-4">
+                <div class="w-full relative">
+                    <input type="text" id="idInput" maxlength="5" pattern="[0-9]{5}" required placeholder="e.g. 84920" autocomplete="off"
+                           class="w-full bg-gray-950 border-2 border-gray-700 focus:border-[#00ffcc] focus:outline-none rounded-xl py-3 px-4 text-center font-orbitron text-2xl tracking-widest text-[#00ffcc] placeholder-gray-600 transition shadow-inner">
+                </div>
+                <button type="submit" class="w-full py-3.5 rounded-xl font-orbitron font-bold text-black bg-[#00ffcc] hover:bg-[#00e6b8] transition transform active:scale-95 glow-cyan flex justify-center items-center gap-2">
+                    <span>LAUNCH SYSTEM</span>
+                    <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                </button>
+            </form>
+            <p class="text-xs text-gray-500 mt-4">Tip: Enter 5 numbers or click Launch to generate a random ID.</p>
+        </section>
+
+        <!-- SCREEN 2: MAIN GAME ARENA -->
+        <section id="screenPlaying" class="hidden w-full max-w-6xl flex-col space-y-6">
+            
+            <!-- Arena Header / Safe Zone Status -->
+            <div class="w-full bg-gray-900/80 border border-gray-800 rounded-2xl p-4 md:p-6 backdrop-blur flex flex-col md:flex-row items-center justify-between gap-4 border-l-4 border-l-[#00ffcc] shadow-lg">
+                <div>
+                    <div class="flex items-center space-x-2 text-xs font-orbitron text-[#00ffcc] tracking-widest mb-1">
+                        <span class="w-2 h-2 rounded-full bg-[#00ffcc]"></span>
+                        <span>SAFE ZONE TARGETING SYSTEM</span>
+                    </div>
+                    <div id="statusMessage" class="text-lg md:text-xl font-semibold text-white">
+                        Initializing Safe Zone...
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 bg-gray-950/80 px-4 py-2.5 rounded-xl border border-gray-800">
+                    <div class="text-center px-2">
+                        <span class="block text-xs text-gray-400 font-orbitron">SAFE RANGE</span>
+                        <span id="rangeDisplay" class="font-orbitron font-bold text-xl text-[#00ffcc] text-glow-cyan">1 - 500</span>
+                    </div>
+                    <div class="h-8 w-px bg-gray-800"></div>
+                    <div class="text-center px-2">
+                        <span class="block text-xs text-gray-400 font-orbitron">SURVIVORS</span>
+                        <span id="survivorsDisplay" class="font-orbitron font-bold text-xl text-[#ff007f] text-glow-pink">50 / 50</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Grid Arena (50 Players: 10 columns on desktop, responsive layout) -->
+            <div class="w-full bg-gray-900/60 border border-gray-800/80 rounded-2xl p-4 md:p-6 backdrop-blur shadow-2xl">
+                <div class="flex justify-between items-center mb-4 px-1">
+                    <h3 class="font-orbitron font-bold text-sm text-gray-400 tracking-wider flex items-center gap-2">
+                        <i data-lucide="users" class="w-4 h-4 text-[#00ffcc]"></i>
+                        GRID MATRIX SURVIVORS
+                    </h3>
+                    <div class="flex gap-4 text-xs">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#00ffcc]"></span> You (P50)</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-[#10b981]"></span> Active Bot</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-gray-600"></span> Eliminated</span>
+                    </div>
+                </div>
+
+                <div id="playerGrid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 md:gap-3">
+                    <!-- Dynamic rendering of 50 player slots -->
+                </div>
+            </div>
+
+            <!-- Turn Input Controller Block -->
+            <div class="w-full bg-gray-900/90 border border-[#00ffcc]/30 rounded-2xl p-4 md:p-6 backdrop-blur flex flex-col md:flex-row items-center justify-between gap-4 glow-cyan">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-[#00ffcc]/10 border border-[#00ffcc] text-[#00ffcc] flex items-center justify-center shrink-0">
+                        <i data-lucide="crosshair" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <label for="choiceInput" class="block font-orbitron text-sm font-bold text-white">SELECT YOUR NUMBER CHOICE</label>
+                        <p id="inputHint" class="text-xs text-gray-400">Choose a tactical number inside the safe range [<span id="hintRange">1 - 500</span>].</p>
+                    </div>
+                </div>
+
+                <form id="choiceForm" onsubmit="handleChoiceSubmit(event)" class="w-full md:w-auto flex items-center gap-3">
+                    <input type="number" id="choiceInput" min="1" max="500" required placeholder="1-500" autocomplete="off"
+                           class="w-32 bg-gray-950 border-2 border-gray-700 focus:border-[#00ffcc] focus:outline-none rounded-xl py-2.5 px-3 text-center font-orbitron text-xl font-bold text-[#00ffcc] placeholder-gray-600 transition shadow-inner">
+                    <button type="submit" id="submitChoiceBtn" class="px-6 py-2.5 rounded-xl font-orbitron font-bold text-black bg-[#00ffcc] hover:bg-[#00e6b8] transition transform active:scale-95 glow-cyan flex items-center gap-2">
+                        <span>SUBMIT</span>
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- SCREEN 3: GAME OVER / VICTORY SUMMARY -->
+        <section id="screenGameOver" class="hidden w-full max-w-lg bg-gray-900/90 border border-gray-800 rounded-2xl p-8 backdrop-blur text-center flex flex-col items-center relative overflow-hidden shadow-2xl">
+            <div id="gameOverGlow" class="absolute -top-16 -left-16 w-48 h-48 rounded-full blur-3xl opacity-30"></div>
+
+            <div id="resultIconContainer" class="w-20 h-20 rounded-full border-2 flex items-center justify-center mb-6 shadow-xl">
+                <!-- Icon inserted via JS -->
+            </div>
+
+            <h2 id="resultTitle" class="font-orbitron font-black text-3xl md:text-4xl tracking-wider mb-2">
+                <!-- Title inserted via JS -->
+            </h2>
+            <p id="resultSubtitle" class="text-gray-400 text-sm mb-6">
+                <!-- Subtitle inserted via JS -->
+            </p>
+
+            <!-- Game Performance Stats -->
+            <div class="w-full bg-gray-950/80 border border-gray-800 rounded-xl p-4 mb-6 grid grid-cols-2 gap-4 text-left">
+                <div>
+                    <span class="block text-xs text-gray-500 font-orbitron">PLAYER ID</span>
+                    <span id="finalPlayerId" class="font-orbitron font-bold text-white text-lg">#00000</span>
+                </div>
+                <div>
+                    <span class="block text-xs text-gray-500 font-orbitron">FINAL RANK</span>
+                    <span id="finalRank" class="font-orbitron font-bold text-[#00ffcc] text-lg">1 / 50</span>
+                </div>
+                <div>
+                    <span class="block text-xs text-gray-500 font-orbitron">FINAL SAFE RANGE</span>
+                    <span id="finalRange" class="font-orbitron font-bold text-gray-300 text-sm">--</span>
+                </div>
+                <div>
+                    <span class="block text-xs text-gray-500 font-orbitron">ROUNDS SURVIVED</span>
+                    <span id="finalRounds" class="font-orbitron font-bold text-gray-300 text-sm">0 Rounds</span>
+                </div>
+            </div>
+
+            <button onclick="resetGame()" class="w-full py-3.5 rounded-xl font-orbitron font-bold text-black bg-[#00ffcc] hover:bg-[#00e6b8] transition transform active:scale-95 glow-cyan flex items-center justify-center gap-2">
+                <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                <span>PLAY AGAIN (PRESS 'R')</span>
+            </button>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-gray-800/60 bg-[#0b0f19]/80 py-3 text-center text-xs text-gray-500">
+        Cyberpunk Arcade Battle Royale &copy; Number Elimination System
+    </footer>
+
+    <!-- Game Logic Script -->
+    <script>
+        // Constants & State
+        const MAX_PLAYERS = 50;
+        const USER_INDEX = 49; // Player 50 is index 49
+
+        let players = [];
+        let g1 = 1;
+        let g2 = 500;
+        let activeCount = MAX_PLAYERS;
+        let roundsCount = 0;
+        let userId = "00000";
+        let isAudioEnabled = true;
+
+        // Sound Effects Controller (Tone.js Synthesizers)
+        const sfx = {
+            synth: null,
+            noise: null,
+            init() {
+                try {
+                    this.synth = new Tone.Synth().toDestination();
+                    this.synth.volume.value = -12;
+                } catch(e) { console.log('Audio init postponed until user gesture'); }
+            },
+            playClick() {
+                if (!isAudioEnabled) return;
+                try {
+                    const synth = new Tone.MembraneSynth().toDestination();
+                    synth.volume.value = -16;
+                    synth.triggerAttackRelease("C4", "8n");
+                } catch(e){}
+            },
+            playElimination() {
+                if (!isAudioEnabled) return;
+                try {
+                    const synth = new Tone.Synth({
+                        oscillator: { type: "sawtooth" },
+                        envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.2 }
+                    }).toDestination();
+                    synth.volume.value = -14;
+                    synth.triggerAttackRelease("G2", "16n");
+                } catch(e){}
+            },
+            playWin() {
+                if (!isAudioEnabled) return;
+                try {
+                    const now = Tone.now();
+                    const poly = new Tone.PolySynth().toDestination();
+                    poly.volume.value = -10;
+                    poly.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n", now);
+                } catch(e){}
+            },
+            playLose() {
+                if (!isAudioEnabled) return;
+                try {
+                    const synth = new Tone.Synth().toDestination();
+                    synth.volume.value = -10;
+                    const now = Tone.now();
+                    synth.triggerAttackRelease("E3", "8n", now);
+                    synth.triggerAttackRelease("C3", "4n", now + 0.2);
+                } catch(e){}
+            }
+        };
+
+        // Initialize Audio Toggle & Icons on Load
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            sfx.init();
+
+            document.getElementById('soundToggleBtn').addEventListener('click', () => {
+                isAudioEnabled = !isAudioEnabled;
+                document.getElementById('soundStatusText').innerText = isAudioEnabled ? "SFX: ON" : "SFX: OFF";
+                const icon = document.getElementById('soundToggleBtn').querySelector('i');
+                if (isAudioEnabled) {
+                    icon.setAttribute('data-lucide', 'volume-2');
+                } else {
+                    icon.setAttribute('data-lucide', 'volume-x');
+                }
+                lucide.createIcons();
+            });
+
+            // Global Keyboard Short-cut Listener (e.g. 'R' for restart)
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'r' || e.key === 'R') {
+                    const gameOverScreen = document.getElementById('screenGameOver');
+                    if (!gameOverScreen.classList.contains('hidden')) {
+                        resetGame();
+                    }
+                }
+            });
+        });
+
+        // SCREEN TRANSITIONS
+        function showScreen(screenId) {
+            ['screenEnterId', 'screenPlaying', 'screenGameOver'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            const target = document.getElementById(screenId);
+            target.classList.remove('hidden');
+            if (screenId === 'screenPlaying') {
+                target.classList.add('flex');
+            } else if (screenId === 'screenEnterId' || screenId === 'screenGameOver') {
+                target.classList.remove('flex');
+            }
+        }
+
+        // SCREEN 1: ID INPUT HANDLER
+        function handleIdSubmit(event) {
+            event.preventDefault();
+            sfx.playClick();
+
+            const input = document.getElementById('idInput').value.trim();
+            if (input.length === 5 && !isNaN(input)) {
+                userId = input;
+            } else {
+                // Generate random 5 digit ID if blank or invalid
+                userId = Math.floor(10000 + Math.random() * 90000).toString();
+            }
+
+            startGame();
+        }
+
+        // START GAME INITIALIZATION
+        function startGame() {
+            players = [];
+            // Generate 49 Bot Players
+            for (let i = 0; i < MAX_PLAYERS - 1; i++) {
+                players.push({
+                    id: Math.floor(10000 + Math.random() * 90000),
+                    no: 0,
+                    active: true,
+                    isUser: false,
+                    justEliminated: false
+                });
+            }
+
+            // User is Player 50 (index 49)
+            players.push({
+                id: parseInt(userId),
+                no: 0,
+                active: true,
+                isUser: true,
+                justEliminated: false
+            });
+
+            g1 = 1;
+            g2 = 500;
+            activeCount = MAX_PLAYERS;
+            roundsCount = 0;
+
+            updateUI();
+            showScreen('screenPlaying');
+            document.getElementById('choiceInput').focus();
+        }
+
+        // RENDER PLAYER MATRIX GRID
+        function renderGrid() {
+            const gridContainer = document.getElementById('playerGrid');
+            gridContainer.innerHTML = '';
+
+            players.forEach((player, index) => {
+                const card = document.createElement('div');
+                card.className = `player-card border rounded-xl p-2 flex flex-col items-center justify-center min-h-[64px] text-center relative overflow-hidden`;
+
+                if (player.justEliminated) {
+                    card.classList.add('just-eliminated');
+                } else if (!player.active) {
+                    card.classList.add('eliminated');
+                } else if (player.isUser) {
+                    card.classList.add('user-active', 'glow-cyan');
+                } else {
+                    card.classList.add('active');
+                }
+
+                // Header badge inside card
+                const pLabel = document.createElement('span');
+                pLabel.className = `text-[10px] font-orbitron font-bold ${player.isUser ? 'text-[#00ffcc]' : 'text-gray-400'}`;
+                pLabel.innerText = `P${index + 1}${player.isUser ? ' (YOU)' : ''}`;
+
+                // Choice number display
+                const pNum = document.createElement('span');
+                pNum.className = `font-orbitron text-sm font-extrabold ${!player.active ? 'line-through text-gray-500' : (player.isUser ? 'text-white' : 'text-emerald-400')}`;
+                pNum.innerText = player.no > 0 ? player.no : '--';
+
+                card.appendChild(pLabel);
+                card.appendChild(pNum);
+
+                gridContainer.appendChild(card);
+            });
+        }
+
+        // UPDATE HEADERS AND STATS
+        function updateUI() {
+            renderGrid();
+
+            document.getElementById('rangeDisplay').innerText = `${g1} - ${g2}`;
+            document.getElementById('hintRange').innerText = `${g1} - ${g2}`;
+            document.getElementById('survivorsDisplay').innerText = `${activeCount} / ${MAX_PLAYERS}`;
+            
+            // Sync input limits dynamically to current range
+            const choiceInput = document.getElementById('choiceInput');
+            choiceInput.min = g1;
+            choiceInput.max = g2;
+            choiceInput.placeholder = `${g1}-${g2}`;
+        }
+
+        // SCREEN 2: TURN CHOICE SUBMISSION & ROUND EXECUTION
+        function handleChoiceSubmit(event) {
+            event.preventDefault();
+            sfx.playClick();
+
+            const inputEl = document.getElementById('choiceInput');
+            const userChoice = parseInt(inputEl.value);
+
+            if (isNaN(userChoice) || userChoice < g1 || userChoice > g2) {
+                // Flash alert styling if input is out of current safe zone bounds
+                inputEl.classList.add('border-red-500', 'animate-bounce');
+                setTimeout(() => inputEl.classList.remove('border-red-500', 'animate-bounce'), 1000);
+                return;
+            }
+
+            roundsCount++;
+
+            // 1. Assign User Choice
+            players[USER_INDEX].no = userChoice;
+
+            // 2. Smart Bot Choices (Bots aim smart inside the current safe range)
+            for (let i = 0; i < MAX_PLAYERS - 1; i++) {
+                if (players[i].active) {
+                    // Smart AI: 85% chance bot chooses inside current range [g1, g2], 15% random blunder
+                    const isSmart = Math.random() < 0.85;
+                    if (isSmart) {
+                        players[i].no = Math.floor(Math.random() * (g2 - g1 + 1)) + g1;
+                    } else {
+                        players[i].no = Math.floor(Math.random() * 500) + 1;
+                    }
+                }
+            }
+
+            // 3. Compute New Shrinking Safe Range
+            const temp1 = Math.floor(Math.random() * (g2 - g1 + 1)) + g1;
+            const temp2 = Math.floor(Math.random() * (g2 - g1 + 1)) + g1;
+            g1 = Math.min(temp1, temp2);
+            g2 = Math.max(temp1, temp2);
+
+            // 4. Determine Eliminations
+            let newlyEliminatedCount = 0;
+            activeCount = 0;
+
+            players.forEach((p) => {
+                p.justEliminated = false;
+                if (p.active) {
+                    if (p.no < g1 || p.no > g2) {
+                        p.active = false;
+                        p.justEliminated = true;
+                        newlyEliminatedCount++;
+                    } else {
+                        activeCount++;
+                    }
+                }
+            });
+
+            if (newlyEliminatedCount > 0) {
+                sfx.playElimination();
+            }
+
+            // Update status text message
+            const statusMsg = document.getElementById('statusMessage');
+            statusMsg.innerHTML = `Zone contracted to <span class="text-[#00ffcc] font-orbitron">[${g1} - ${g2}]</span>. <span class="text-[#ff007f] font-bold">${newlyEliminatedCount} combatants</span> eliminated!`;
+
+            // Reset input box
+            inputEl.value = '';
+
+            // Render updated grid
+            updateUI();
+
+            // 5. Evaluate Game Over / Victory Conditions
+            setTimeout(() => {
+                if (!players[USER_INDEX].active) {
+                    // User Eliminated
+                    endGame(false);
+                } else if (activeCount <= 1) {
+                    // User Won / Last Survivor standing
+                    endGame(true);
+                }
+            }, 600);
+        }
+
+        // END GAME DISPLAY (VICTORY / DEFEAT)
+        function endGame(userWon) {
+            const gameOverGlow = document.getElementById('gameOverGlow');
+            const iconContainer = document.getElementById('resultIconContainer');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultSubtitle = document.getElementById('resultSubtitle');
+            
+            document.getElementById('finalPlayerId').innerText = `#${userId}`;
+            document.getElementById('finalRank').innerText = `${activeCount} / 50`;
+            document.getElementById('finalRange').innerText = `[${g1} - ${g2}]`;
+            document.getElementById('finalRounds').innerText = `${roundsCount} Rounds`;
+
+            if (userWon) {
+                sfx.playWin();
+                gameOverGlow.className = "absolute -top-16 -left-16 w-48 h-48 bg-[#00ffcc] rounded-full blur-3xl opacity-30";
+                iconContainer.className = "w-20 h-20 rounded-full border-2 border-[#00ffcc] bg-[#00ffcc]/20 text-[#00ffcc] flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(0,255,204,0.5)]";
+                iconContainer.innerHTML = `<i data-lucide="trophy" class="w-10 h-10"></i>`;
+                
+                resultTitle.className = "font-orbitron font-black text-3xl md:text-4xl tracking-wider mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#00ffcc] to-emerald-400 text-glow-cyan";
+                resultTitle.innerText = "BOOYAH! VICTORY ROYALE!";
+                resultSubtitle.innerText = "Exceptional tactical calculation. You were the last survivor standing in the arena!";
+            } else {
+                sfx.playLose();
+                gameOverGlow.className = "absolute -top-16 -left-16 w-48 h-48 bg-red-600 rounded-full blur-3xl opacity-30";
+                iconContainer.className = "w-20 h-20 rounded-full border-2 border-red-500 bg-red-500/20 text-red-500 flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(239,68,68,0.5)]";
+                iconContainer.innerHTML = `<i data-lucide="skull" class="w-10 h-10"></i>`;
+                
+                resultTitle.className = "font-orbitron font-black text-3xl md:text-4xl tracking-wider mb-2 text-red-500 text-shadow";
+                resultTitle.innerText = "SYSTEM ELIMINATED";
+                resultSubtitle.innerText = "Your number fell outside the shrinking safe zone bounds. Better luck next deployment!";
+            }
+
+            lucide.createIcons();
+            showScreen('screenGameOver');
+        }
+
+        // RESET GAME TO SCREEN 1
+        function resetGame() {
+            sfx.playClick();
+            document.getElementById('idInput').value = '';
+            showScreen('screenEnterId');
+        }
+    </script>
+</body>
+</html>
